@@ -135,7 +135,6 @@ function RSA() {
 
   function generate(B, E) {
     var webCrypto = util.getWebCrypto();
-    var promise;
 
     //
     // Native RSA keygen using Web Crypto
@@ -144,22 +143,52 @@ function RSA() {
     if (webCrypto) {
       var Euint32 = new Uint32Array([parseInt(E, 16)]); // get integer of exponent
       var Euint8 = new Uint8Array(Euint32.buffer); // get bytes of exponent
-      var keyGenOpt = {
-        name: 'RSASSA-PKCS1-v1_5',
-        modulusLength: B, // the specified keysize in bits
-        publicExponent: Euint8.subarray(0, 3), // take three bytes (max 65537)
-        hash: {
-          name: 'SHA-1' // not required for actual RSA keys, but for crypto api 'sign' and 'verify'
+      var keyGenOpt;
+
+      var keys;
+      if (window.crypto && window.crypto.webkitSubtle) {
+        // outdated spec implemented by Webkit
+        keyGenOpt = {
+          name: 'RSA-OAEP',
+          modulusLength: B, // the specified keysize in bits
+          publicExponent: Euint8.subarray(0, 3), // take three bytes (max 65537)
+        };
+        keys = webCrypto.generateKey(keyGenOpt, true, ['encrypt', 'decrypt']);
+      }
+      else {
+        // current standard spec
+        keyGenOpt = {
+          name: 'RSASSA-PKCS1-v1_5',
+          modulusLength: B, // the specified keysize in bits
+          publicExponent: Euint8.subarray(0, 3), // take three bytes (max 65537)
+          hash: {
+            name: 'SHA-1' // not required for actual RSA keys, but for crypto api 'sign' and 'verify'
+          }
+        };
+        
+        keys = webCrypto.generateKey(keyGenOpt, true, ['sign', 'verify']);
+        if (!(keys instanceof Promise)) { // IE11 KeyOperation
+          keys = convertKeyOperation(keys, 'Error generating RSA key pair.');
         }
-      };
-      promise = webCrypto.generateKey(keyGenOpt, true, ['sign', 'verify']);
-      return promise.then(exportKey).then(decodeKey);
+      }
+
+      return keys.then(exportKey).then(function(key) {
+        if (key instanceof ArrayBuffer) {
+          // parse raw ArrayBuffer bytes to jwk/json (WebKit/Safari/IE11 quirk)
+          return decodeKey(JSON.parse(String.fromCharCode.apply(null, new Uint8Array(key))));
+        }
+        return decodeKey(key);
+      });
     }
 
-    function exportKey(key) {
+    function exportKey(keypair) {
       // export the generated keys as JsonWebKey (JWK)
       // https://tools.ietf.org/html/draft-ietf-jose-json-web-key-33
-      return webCrypto.exportKey('jwk', key.privateKey);
+      var key = webCrypto.exportKey('jwk', keypair.privateKey);
+      if (!(key instanceof Promise)) { // IE11 KeyOperation
+        key = convertKeyOperation(key, 'Error exporting RSA key pair.');
+      }
+      return key;
     }
 
     function decodeKey(jwk) {
@@ -181,11 +210,22 @@ function RSA() {
       return key;
     }
 
+    function convertKeyOperation(keyop, errmsg) {
+      return new Promise(function(resolve, reject) {
+        keyop.onerror = function (err) { 
+          reject(new Error(errmsg));
+        }
+        keyop.oncomplete = function (e) {
+          resolve(e.target.result);
+        }
+      });
+    }
+
     //
     // JS code
     //
 
-    promise = new Promise(function(resolve) {
+    return new Promise(function(resolve) {
       var key = new keyObject();
       var rng = new SecureRandom();
       var qs = B >> 1;
@@ -223,8 +263,6 @@ function RSA() {
 
       resolve(key);
     });
-
-    return promise;
   }
 
   this.encrypt = encrypt;

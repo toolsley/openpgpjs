@@ -202,11 +202,11 @@ module.exports = {
    * @return {String} String representation of the array
    */
   Uint8Array2str: function (bin) {
-    var result = '';
+    var result = [];
     for (var i = 0; i < bin.length; i++) {
-      result += String.fromCharCode(bin[i]);
+      result[i] = String.fromCharCode(bin[i]);
     }
-    return result;
+    return result.join('');
   },
 
   /**
@@ -320,8 +320,13 @@ module.exports = {
       return;
     }
 
-    if (typeof window !== 'undefined' && window.crypto && window.crypto.subtle) {
-      return window.crypto.subtle;
+    if (typeof window !== 'undefined') {
+      if (window.crypto) {
+        return window.crypto.subtle || window.crypto.webkitSubtle;
+      }
+      if (window.msCrypto) {
+        return window.msCrypto.subtle;
+      }
     }
   }
 };
