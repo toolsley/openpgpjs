@@ -17,6 +17,12 @@ module.exports.message = require('./message.js');
  */
 module.exports.cleartext = require('./cleartext.js');
 /**
+ * @see module:externallyhashedsignaturevalidation
+ * @name module:openpgp.externallyhashedsignaturevalidation
+ */
+module.exports.externallyhashedsignaturevalidation = require('./externallyhashedsignaturevalidation.js');
+
+/**
  * @see module:util
  * @name module:openpgp.util
  */

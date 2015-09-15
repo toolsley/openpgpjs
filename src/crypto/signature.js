@@ -10,11 +10,11 @@ var publicKey = require('./public_key'),
 
 module.exports = {
   /**
-   * 
+   *
    * @param {module:enums.publicKey} algo public Key algorithm
    * @param {module:enums.hash} hash_algo Hash algorithm
    * @param {Array<module:type/mpi>} msg_MPIs Signature multiprecision integers
-   * @param {Array<module:type/mpi>} publickey_MPIs Public key multiprecision integers 
+   * @param {Array<module:type/mpi>} publickey_MPIs Public key multiprecision integers
    * @param {String} data Data on where the signature was computed on.
    * @return {Boolean} true if signature (sig_data was equal to data over hash)
    */
@@ -22,7 +22,7 @@ module.exports = {
 
     switch (algo) {
       case 1:
-        // RSA (Encrypt or Sign) [HAC]  
+        // RSA (Encrypt or Sign) [HAC]
       case 2:
         // RSA Encrypt-Only [HAC]
       case 3:
@@ -54,6 +54,51 @@ module.exports = {
         throw new Error('Invalid signature algorithm.');
     }
   },
+    /**
+     *
+     * @param {module:enums.publicKey} algo public Key algorithm
+     * @param {module:enums.hash} hash_algo Hash algorithm
+     * @param {Array<module:type/mpi>} msg_MPIs Signature multiprecision integers
+     * @param {Array<module:type/mpi>} publickey_MPIs Public key multiprecision integers
+     * @param {String} hash preCalculated hash
+     * @return {Boolean} true if signature (sig_data was equal to data over hash)
+     */
+    verifyHash: function(algo, hash_algo, msg_MPIs, publickey_MPIs, hash) {
+
+        switch (algo) {
+            case 1:
+            // RSA (Encrypt or Sign) [HAC]
+            case 2:
+            // RSA Encrypt-Only [HAC]
+            case 3:
+                // RSA Sign-Only [HAC]
+                var rsa = new publicKey.rsa();
+                var n = publickey_MPIs[0].toBigInteger();
+                var k = publickey_MPIs[0].byteLength();
+                var e = publickey_MPIs[1].toBigInteger();
+                var m = msg_MPIs[0].toBigInteger();
+                var EM = rsa.verify(m, e, n);
+                var EM2 = pkcs1.emsa.encodeHash(hash_algo, hash, k);
+                return EM.compareTo(EM2) === 0;
+            case 16:
+                // Elgamal (Encrypt-Only) [ELGAMAL] [HAC]
+                throw new Error("signing with Elgamal is not defined in the OpenPGP standard.");
+            case 17:
+                // DSA (Digital Signature Algorithm) [FIPS186] [HAC]
+                var dsa = new publicKey.dsa();
+                var s1 = msg_MPIs[0].toBigInteger();
+                var s2 = msg_MPIs[1].toBigInteger();
+                var p = publickey_MPIs[0].toBigInteger();
+                var q = publickey_MPIs[1].toBigInteger();
+                var g = publickey_MPIs[2].toBigInteger();
+                var y = publickey_MPIs[3].toBigInteger();
+    //            var m = data;
+                var dopublic = dsa.verifyHash(s1, s2, hash, p, q, g, y);
+                return dopublic.compareTo(s1) === 0;
+            default:
+                throw new Error('Invalid signature algorithm.');
+        }
+    },
 
   /**
    * Create a signature on data using the specified algorithm

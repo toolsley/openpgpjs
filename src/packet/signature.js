@@ -642,6 +642,43 @@ Signature.prototype.verify = function (key, data) {
 };
 
 /**
+ * verifys the signature packet with a precalculated hash. Note: not signature types are implemented
+ * @param {String|Object} data data which on the signature applies
+ * @param {module:packet/public_subkey|module:packet/public_key|
+ *         module:packet/secret_subkey|module:packet/secret_key} key the public key to verify the signature
+ * @return {boolean} True if message is verified, else false.
+ */
+Signature.prototype.verifyHash = function (key, hash) {
+    var signatureType = enums.write(enums.signature, this.signatureType),
+        publicKeyAlgorithm = enums.write(enums.publicKey, this.publicKeyAlgorithm),
+        hashAlgorithm = enums.write(enums.hash, this.hashAlgorithm);
+
+    var mpicount = 0;
+    // Algorithm-Specific Fields for RSA signatures:
+    //      - multiprecision number (MPI) of RSA signature value m**d mod n.
+    if (publicKeyAlgorithm > 0 && publicKeyAlgorithm < 4)
+        mpicount = 1;
+    //    Algorithm-Specific Fields for DSA signatures:
+    //      - MPI of DSA value r.
+    //      - MPI of DSA value s.
+    else if (publicKeyAlgorithm == 17)
+        mpicount = 2;
+
+    var mpi = [],
+        i = 0;
+    for (var j = 0; j < mpicount; j++) {
+        mpi[j] = new type_mpi();
+        i += mpi[j].read(this.signature.substr(i));
+    }
+
+    this.verified = crypto.signature.verifyHash(publicKeyAlgorithm,
+        hashAlgorithm, mpi, key.mpi,
+            hash);
+
+    return this.verified;
+};
+
+/**
  * Verifies signature expiration date
  * @return {Boolean} true if expired
  */
